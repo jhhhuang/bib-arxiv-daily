@@ -2,7 +2,7 @@
 
 [简体中文说明 / Chinese README](./README.zh-CN.md)
 
-`bib-arxiv-daily` recommends newly announced arXiv papers based on the papers in your local `.bib` files, then sends the results by email on a daily schedule using GitHub Actions.
+`bib-arxiv-daily` recommends newly announced arXiv papers based on the papers in your local `.bib` files, then sends the results by email on a daily schedule using GitHub Actions. It also includes a manual workflow for a last-7-days top-10 recommendation run.
 
 This repository is designed for beginners:
 
@@ -21,6 +21,8 @@ The current version does not use OpenAI, Claude, or any paid LLM API. It uses an
 4. Compute text embeddings for your library papers and the new arXiv candidates
 5. Rank candidates by similarity to your library
 6. Send an HTML email with the top matches
+
+You can also trigger a manual weekly run that queries arXiv submissions from the last `7` days through the export API and emails the top `10` closest matches.
 
 The current email includes:
 
@@ -49,7 +51,9 @@ The current version does not send PDF attachments. It sends links only.
 │   └── main.py
 ├── config.yaml               # Non-secret configuration
 ├── requirements.txt
-└── .github/workflows/daily.yml
+└── .github/workflows/
+    ├── daily.yml
+    └── manual-weekly-top10.yml
 ```
 
 ## Before You Start
@@ -263,9 +267,10 @@ Recommended rule:
 - If it is a password, token, app password, authorization code, email address, or host you do not want public, put it in `Repository secrets`
 - Keep only non-secret behavior settings in `config.yaml`
 
-Current workflow file:
+Current workflow files:
 
 - [`.github/workflows/daily.yml`](./.github/workflows/daily.yml)
+- [`.github/workflows/manual-weekly-top10.yml`](./.github/workflows/manual-weekly-top10.yml)
 
 Current config file:
 
@@ -304,6 +309,15 @@ What to look for in the logs:
 
 If there are no recommendations and `send_empty_email: false`, the workflow can finish successfully without sending an email. That is normal.
 
+If you want a manual weekly summary instead of the normal daily run:
+
+1. Open the `Actions` tab
+2. Open the `arxiv-weekly-manual-top10` workflow
+3. Click `Run workflow`
+4. Wait for the run to finish
+
+That workflow is manual-only. It queries the last `7` days of arXiv submissions through the export API, keeps up to `500` candidates, ranks them against your `.bib` library, and emails the top `10` matches.
+
 ## Daily Schedule
 
 The current workflow schedule is defined in:
@@ -320,6 +334,21 @@ schedule:
 That means the workflow runs at `01:30 UTC` every day.
 
 If you want a different time, edit the cron line and commit the change.
+
+## Manual Weekly Workflow
+
+The repository also includes:
+
+- [`.github/workflows/manual-weekly-top10.yml`](./.github/workflows/manual-weekly-top10.yml)
+
+This workflow has `workflow_dispatch` only. It does not run on a schedule.
+
+Current fixed behavior:
+
+- query arXiv papers submitted in the last `7` days
+- use the export API directly instead of RSS
+- score up to `500` candidates
+- send the top `10` matches by email
 
 ## Model Used
 
@@ -428,6 +457,19 @@ python3 -m venv .venv
 ```
 
 `--dry-run` writes the HTML report but skips SMTP send.
+
+To reproduce the manual weekly top-10 workflow locally:
+
+```bash
+.venv/bin/python src/main.py --config config.yaml --lookback-days 7 --max-candidates 500 --max-results 10 --dry-run --output-html output/manual_weekly_top10_report.html
+```
+
+Useful CLI overrides:
+
+- `--lookback-days N`: query the last `N` days through the arXiv export API instead of RSS new announcements
+- `--max-candidates N`: override `arxiv.max_candidates` from `config.yaml`
+- `--max-results N`: override `ranking.max_results` from `config.yaml`
+- `--output-html PATH`: write the rendered report to a custom path
 
 ## Troubleshooting
 

@@ -61,11 +61,14 @@ class ArxivFetcher:
         unique_ids = list(dict.fromkeys(paper_ids))[: self.max_candidates]
         LOGGER.info("Fetched %s new arXiv ids from RSS feed", len(unique_ids))
         if not unique_ids:
-            fallback_candidates = self._fetch_recent_papers_via_api(hours=RSS_FALLBACK_WINDOW_HOURS)
+            window_end = self._normalize_utc(self._now_fn())
+            window_start = window_end - timedelta(hours=RSS_FALLBACK_WINDOW_HOURS)
+            fallback_candidates = self._fetch_recent_papers_via_api(window_start=window_start, window_end=window_end)
             return fallback_candidates, ArxivFetchStats(
                 rss_new_count=len(paper_ids),
                 rss_unique_count=len(unique_ids),
                 fetched_candidate_count=len(fallback_candidates),
+                query_mode="rss_new",
                 fallback_used=True,
                 fallback_window_hours=RSS_FALLBACK_WINDOW_HOURS,
                 fallback_candidate_count=len(fallback_candidates),
@@ -85,16 +88,30 @@ class ArxivFetcher:
             rss_new_count=len(paper_ids),
             rss_unique_count=len(unique_ids),
             fetched_candidate_count=len(candidates[: self.max_candidates]),
+            query_mode="rss_new",
         )
         return candidates[: self.max_candidates], fetch_stats
 
-    def _fetch_recent_papers_via_api(self, hours: int) -> list[CandidatePaper]:
-        arxiv_module = self._get_arxiv_module()
+    def fetch_recent_papers(self, days: int) -> tuple[list[CandidatePaper], ArxivFetchStats]:
+        if days < 1:
+            raise ValueError("lookback days must be at least 1")
+
         window_end = self._normalize_utc(self._now_fn())
-        window_start = window_end - timedelta(hours=hours)
+        window_start = window_end - timedelta(days=days)
+        candidates = self._fetch_recent_papers_via_api(window_start=window_start, window_end=window_end)
+        return candidates, ArxivFetchStats(
+            rss_new_count=0,
+            rss_unique_count=0,
+            fetched_candidate_count=len(candidates),
+            query_mode="lookback",
+            lookback_days=days,
+        )
+
+    def _fetch_recent_papers_via_api(self, window_start: datetime, window_end: datetime) -> list[CandidatePaper]:
+        arxiv_module = self._get_arxiv_module()
         query = self._build_recent_query(window_start, window_end)
         api_url = f"{ARXIV_EXPORT_API_URL}?{urlencode(self._build_recent_query_params(query))}"
-        LOGGER.info("RSS returned 0 new ids; falling back to arXiv export API: %s", api_url)
+        LOGGER.info("Querying arXiv export API over explicit time window: %s", api_url)
 
         client = arxiv_module.Client(num_retries=5, delay_seconds=3)
         sort_criterion = getattr(getattr(arxiv_module, "SortCriterion", None), "SubmittedDate", None)
@@ -116,7 +133,7 @@ class ArxivFetcher:
         category_query = " OR ".join(f"cat:{category}" for category in self.categories)
         start_token = window_start.strftime("%Y%m%d%H%M%S")
         end_token = window_end.strftime("%Y%m%d%H%M%S")
-        # [EN] Query by submittedDate over the last 24 hours so the export API can bridge the lag between arXiv announcements and RSS propagation. / [CN] 用最近 24 小时的 submittedDate 查询 export API，以弥补 arXiv announcement 与 RSS 同步之间的延迟。
+        # [EN] Query by submittedDate over an explicit UTC window so manual weekly runs and RSS fallback both operate on a reproducible candidate set. / [CN] 按显式 UTC 时间窗口查询 submittedDate，这样手动周报和 RSS 回退都能基于可复现的候选集合工作。
         return f"submittedDate:[{start_token} TO {end_token}] AND ({category_query})"
 
     def _build_recent_query_params(self, query: str) -> dict[str, str | int]:

@@ -1,0 +1,52 @@
+name: arxiv-weekly-manual-top10
+
+on:
+  workflow_dispatch:
+
+jobs:
+  recommend:
+    runs-on: ubuntu-latest
+    env:
+      HF_HOME: .hf-cache
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Cache Hugging Face model files
+        uses: actions/cache@v4
+        with:
+          path: .hf-cache
+          key: hf-${{ runner.os }}-${{ hashFiles('requirements.txt', 'config.yaml') }}
+          restore-keys: |
+            hf-${{ runner.os }}-
+
+      - name: Cache library embeddings
+        uses: actions/cache@v4
+        with:
+          path: .cache/recommender
+          key: lib-emb-${{ runner.os }}-${{ hashFiles('requirements.txt', 'config.yaml', 'data/**/*.bib') }}
+          restore-keys: |
+            lib-emb-${{ runner.os }}-
+
+      - name: Install CPU PyTorch
+        run: pip install --extra-index-url https://download.pytorch.org/whl/cpu "torch>=2.2,<3.0"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run weekly manual top-10 recommender
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          SMTP_USE_SSL: ${{ secrets.SMTP_USE_SSL }}
+        run: python src/main.py --config config.yaml --lookback-days 7 --max-candidates 500 --max-results 10 --output-html output/manual_weekly_top10_report.html

@@ -70,6 +70,8 @@ class ArxivFetchStats:
     rss_new_count: int
     rss_unique_count: int
     fetched_candidate_count: int
+    query_mode: str = "rss_new"
+    lookback_days: int = 0
     fallback_used: bool = False
     fallback_window_hours: int = 0
     fallback_candidate_count: int = 0

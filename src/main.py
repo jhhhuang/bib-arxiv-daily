@@ -24,6 +24,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", default="config.yaml", help="Path to YAML configuration file.")
     parser.add_argument("--dry-run", action="store_true", help="Build the report but do not send email.")
     parser.add_argument(
+        "--lookback-days",
+        type=int,
+        default=0,
+        help="Query papers submitted within the last N days via the arXiv export API instead of RSS new announcements.",
+    )
+    parser.add_argument(
+        "--max-candidates",
+        type=int,
+        default=None,
+        help="Optional override for the maximum number of arXiv candidates to score.",
+    )
+    parser.add_argument(
+        "--max-results",
+        type=int,
+        default=None,
+        help="Optional override for the number of recommendations included in the email.",
+    )
+    parser.add_argument(
         "--output-html",
         default=None,
         help="Optional override for the rendered HTML report path.",
@@ -42,9 +60,18 @@ def main() -> int:
     configure_logging()
     args = parse_args()
     settings = load_settings(Path(args.config))
+    if args.lookback_days < 0:
+        raise ValueError("--lookback-days must be 0 or greater")
 
     if not settings.arxiv.categories:
         raise ValueError("config.yaml must define at least one arXiv category under arxiv.categories")
+
+    max_candidates = args.max_candidates if args.max_candidates is not None else settings.arxiv.max_candidates
+    max_results = args.max_results if args.max_results is not None else settings.ranking.max_results
+    if max_candidates < 1:
+        raise ValueError("--max-candidates must be at least 1")
+    if max_results < 1:
+        raise ValueError("--max-results must be at least 1")
 
     library_papers, library_stats = load_library(settings.runtime.data_dir)
     if not library_papers:
@@ -52,9 +79,12 @@ def main() -> int:
 
     fetcher = ArxivFetcher(
         categories=settings.arxiv.categories,
-        max_candidates=settings.arxiv.max_candidates,
+        max_candidates=max_candidates,
     )
-    candidate_papers, fetch_stats = fetcher.fetch_new_papers()
+    if args.lookback_days > 0:
+        candidate_papers, fetch_stats = fetcher.fetch_recent_papers(args.lookback_days)
+    else:
+        candidate_papers, fetch_stats = fetcher.fetch_new_papers()
 
     embedder = SentenceTransformerEmbedder(
         model_name=settings.embedding.model,
@@ -70,7 +100,7 @@ def main() -> int:
     recommender = Recommender(
         embedder=embedder,
         top_k_neighbors=settings.ranking.top_k_neighbors,
-        max_results=settings.ranking.max_results,
+        max_results=max_results,
     )
     recommendations, recommendation_stats = recommender.recommend(
         library_papers,
@@ -78,7 +108,9 @@ def main() -> int:
         library_embeddings=library_embeddings,
     )
     LOGGER.info(
-        "Pipeline stats | rss_new=%s rss_unique=%s fallback_used=%s fallback_count=%s fetched=%s after_dedup=%s threshold_filtered=%s final=%s",
+        "Pipeline stats | query_mode=%s lookback_days=%s rss_new=%s rss_unique=%s fallback_used=%s fallback_count=%s fetched=%s after_dedup=%s threshold_filtered=%s final=%s",
+        fetch_stats.query_mode,
+        fetch_stats.lookback_days,
         fetch_stats.rss_new_count,
         fetch_stats.rss_unique_count,
         fetch_stats.fallback_used,

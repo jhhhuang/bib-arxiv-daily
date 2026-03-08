@@ -2,7 +2,7 @@
 
 [English README](./README.md)
 
-`bib-arxiv-daily` 会根据你放在本仓库中的 `.bib` 文件，去匹配每天新发布的 arXiv 论文，然后通过 GitHub Actions 定时发送推荐邮件。
+`bib-arxiv-daily` 会根据你放在本仓库中的 `.bib` 文件，去匹配每天新发布的 arXiv 论文，然后通过 GitHub Actions 定时发送推荐邮件。仓库里还提供了一个“最近 7 天 + 最接近 10 篇”的手动工作流。
 
 这个仓库是按“小白可上手”来设计的：
 
@@ -21,6 +21,8 @@
 4. 计算你的馆藏论文和候选论文的文本向量
 5. 根据相似度排序
 6. 发送 HTML 推荐邮件
+
+你也可以手动触发一个周报流程：直接查询最近 `7` 天提交到 arXiv 的论文，筛出最接近你 bib 库的前 `10` 篇并发送邮件。
 
 当前邮件内容包括：
 
@@ -49,7 +51,9 @@
 │   └── main.py
 ├── config.yaml               # 非私密配置
 ├── requirements.txt
-└── .github/workflows/daily.yml
+└── .github/workflows/
+    ├── daily.yml
+    └── manual-weekly-top10.yml
 ```
 
 ## 开始前你需要准备什么
@@ -269,6 +273,7 @@ GitHub 官方参考：
 当前工作流文件：
 
 - [`.github/workflows/daily.yml`](./.github/workflows/daily.yml)
+- [`.github/workflows/manual-weekly-top10.yml`](./.github/workflows/manual-weekly-top10.yml)
 
 当前配置文件：
 
@@ -307,6 +312,15 @@ SMTP_USE_SSL=true
 
 如果没有推荐结果，而且 `send_empty_email: false`，那工作流可以成功结束但不发邮件，这是正常行为。
 
+如果你想跑一次手动周报，而不是普通的日更流程：
+
+1. 打开 `Actions`
+2. 打开 `arxiv-weekly-manual-top10` 这个 workflow
+3. 点击 `Run workflow`
+4. 等它跑完
+
+这个工作流只支持手动触发。它会直接使用 export API 查询最近 `7` 天的 arXiv 提交，最多打分 `500` 篇候选论文，并发送最接近的 `10` 篇。
+
 ## 每天什么时候运行
 
 当前定时配置在：
@@ -323,6 +337,21 @@ schedule:
 这表示每天 `06:30 UTC` 运行一次。 也就是北京时间下午14:30.
 
 如果你想改时间，直接修改 cron 后提交即可。
+
+## 手动周报工作流
+
+仓库里还包含：
+
+- [`.github/workflows/manual-weekly-top10.yml`](./.github/workflows/manual-weekly-top10.yml)
+
+这个工作流只有 `workflow_dispatch`，不会自动定时运行。
+
+当前固定行为：
+
+- 查询最近 `7` 天提交的 arXiv 论文
+- 直接走 export API，不依赖 RSS 当日公告
+- 最多打分 `500` 篇候选论文
+- 邮件发送最接近的前 `10` 篇
 
 ## 当前使用的模型
 
@@ -434,6 +463,19 @@ python3 -m venv .venv
 ```
 
 `--dry-run` 会生成 HTML 报告，但不会真正发邮件。
+
+如果你想在本地复现“手动周报 top 10”流程，可以运行：
+
+```bash
+.venv/bin/python src/main.py --config config.yaml --lookback-days 7 --max-candidates 500 --max-results 10 --dry-run --output-html output/manual_weekly_top10_report.html
+```
+
+几个有用的 CLI 覆盖参数：
+
+- `--lookback-days N`：改成直接查最近 `N` 天的 arXiv 提交，不走 RSS new announcement
+- `--max-candidates N`：覆盖 `config.yaml` 里的 `arxiv.max_candidates`
+- `--max-results N`：覆盖 `config.yaml` 里的 `ranking.max_results`
+- `--output-html PATH`：把 HTML 报告输出到自定义路径
 
 ## 常见问题排查
 

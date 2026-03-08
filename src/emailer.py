@@ -35,6 +35,7 @@ def build_email_html(
             f"<p><strong>Fallback used:</strong> yes, export API last {fetch_stats.fallback_window_hours}h "
             f"({fetch_stats.fallback_candidate_count} candidates)</p>"
         )
+    query_summary = _build_query_summary(fetch_stats)
     library_summary = (
         f"<p>Generated at {generated_at:%Y-%m-%d %H:%M UTC}. "
         f"Library papers with abstracts: {library_stats.entries_with_abstract}. "
@@ -44,8 +45,9 @@ def build_email_html(
     pipeline_summary = (
         "<div class='paper-card'>"
         "<h2>Pipeline summary</h2>"
-        f"<p><strong>RSS new papers:</strong> {fetch_stats.rss_new_count}</p>"
+        f"{query_summary}"
         f"{fallback_summary}"
+        f"<p><strong>Fetched candidates:</strong> {fetch_stats.fetched_candidate_count}</p>"
         f"<p><strong>After dedupe / already-in-library filter:</strong> {recommendation_stats.after_dedup_filter_count}</p>"
         f"<p><strong>Threshold filtered:</strong> {recommendation_stats.threshold_filtered_count}</p>"
         "</div>"
@@ -54,7 +56,7 @@ def build_email_html(
     if not recommendations:
         body = (
             "<div class='paper-card'>"
-            "<h2>No new matches today</h2>"
+            "<h2>No matching papers found</h2>"
             f"<p>{html.escape(_build_empty_reason(fetch_stats, recommendation_stats))}</p>"
             "</div>"
         )
@@ -87,6 +89,14 @@ def build_email_html(
 
 
 def _build_empty_reason(fetch_stats: ArxivFetchStats, recommendation_stats: RecommendationStats) -> str:
+    if fetch_stats.query_mode == "lookback":
+        if fetch_stats.fetched_candidate_count == 0:
+            return f"Export API returned 0 candidates over the last {fetch_stats.lookback_days} days in the configured categories."
+        if recommendation_stats.after_dedup_filter_count == 0:
+            return (
+                "The lookback query returned candidates, but 0 remained after dedupe / already-in-library filtering."
+            )
+        return "The workflow ran successfully but did not find any close arXiv papers in the requested lookback window."
     if fetch_stats.rss_new_count == 0 and fetch_stats.fallback_used and fetch_stats.fallback_candidate_count == 0:
         return (
             "RSS returned 0 new papers, and the export API fallback over the last "
@@ -104,6 +114,12 @@ def _build_empty_reason(fetch_stats: ArxivFetchStats, recommendation_stats: Reco
     return "The workflow ran successfully but did not find any new arXiv papers close to your bib corpus."
 
 
+def _build_query_summary(fetch_stats: ArxivFetchStats) -> str:
+    if fetch_stats.query_mode == "lookback":
+        return f"<p><strong>Query window:</strong> last {fetch_stats.lookback_days} days via export API</p>"
+    return f"<p><strong>RSS new papers:</strong> {fetch_stats.rss_new_count}</p>"
+
+
 def _wrap_html(content: str) -> str:
     return (
         "<!DOCTYPE html>"
@@ -116,7 +132,7 @@ def _wrap_html(content: str) -> str:
         "p { line-height: 1.5; }"
         "</style>"
         "</head><body>"
-        "<h1>arXiv Daily Recommendations</h1>"
+        "<h1>arXiv Recommendations</h1>"
         f"{content}"
         "</body></html>"
     )

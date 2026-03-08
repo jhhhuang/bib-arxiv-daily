@@ -144,6 +144,37 @@ class ArxivFetcherTest(unittest.TestCase):
             search.query,
         )
 
+    def test_fetch_recent_papers_queries_last_7_days_via_export_api(self) -> None:
+        weekly_results = [
+            FakeArxivResult("2501.20001", "Weekly Paper One"),
+            FakeArxivResult("2501.20002", "Weekly Paper Two"),
+        ]
+        weekly_results[0].published = datetime(2025, 1, 2, 12, 0, tzinfo=timezone.utc)
+        weekly_results[1].published = datetime(2025, 1, 8, 6, 0, tzinfo=timezone.utc)
+        fake_arxiv = FakeArxivModule(query_results=weekly_results)
+        fetcher = ArxivFetcher(
+            categories=("cs.LG", "cs.AI"),
+            max_candidates=25,
+            arxiv_module=fake_arxiv,
+            now_fn=lambda: datetime(2025, 1, 8, 12, 0, tzinfo=timezone.utc),
+        )
+
+        papers, stats = fetcher.fetch_recent_papers(days=7)
+
+        self.assertEqual(2, len(papers))
+        self.assertEqual("lookback", stats.query_mode)
+        self.assertEqual(7, stats.lookback_days)
+        self.assertEqual(2, stats.fetched_candidate_count)
+        self.assertEqual("Weekly Paper Two", papers[0].title)
+        search = fake_arxiv.created_client.seen_queries[0]
+        self.assertEqual(25, search.max_results)
+        self.assertEqual("submittedDate", search.sort_by)
+        self.assertEqual("descending", search.sort_order)
+        self.assertEqual(
+            "submittedDate:[20250101120000 TO 20250108120000] AND (cat:cs.LG OR cat:cs.AI)",
+            search.query,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
