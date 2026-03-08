@@ -29,6 +29,12 @@ def build_email_html(
     include_pdf_links: bool,
     generated_at: datetime,
 ) -> str:
+    fallback_summary = ""
+    if fetch_stats.fallback_used:
+        fallback_summary = (
+            f"<p><strong>Fallback used:</strong> yes, export API last {fetch_stats.fallback_window_hours}h "
+            f"({fetch_stats.fallback_candidate_count} candidates)</p>"
+        )
     library_summary = (
         f"<p>Generated at {generated_at:%Y-%m-%d %H:%M UTC}. "
         f"Library papers with abstracts: {library_stats.entries_with_abstract}. "
@@ -39,6 +45,7 @@ def build_email_html(
         "<div class='paper-card'>"
         "<h2>Pipeline summary</h2>"
         f"<p><strong>RSS new papers:</strong> {fetch_stats.rss_new_count}</p>"
+        f"{fallback_summary}"
         f"<p><strong>After dedupe / already-in-library filter:</strong> {recommendation_stats.after_dedup_filter_count}</p>"
         f"<p><strong>Threshold filtered:</strong> {recommendation_stats.threshold_filtered_count}</p>"
         "</div>"
@@ -80,6 +87,11 @@ def build_email_html(
 
 
 def _build_empty_reason(fetch_stats: ArxivFetchStats, recommendation_stats: RecommendationStats) -> str:
+    if fetch_stats.rss_new_count == 0 and fetch_stats.fallback_used and fetch_stats.fallback_candidate_count == 0:
+        return (
+            "RSS returned 0 new papers, and the export API fallback over the last "
+            f"{fetch_stats.fallback_window_hours} hours also returned 0 candidates."
+        )
     if fetch_stats.rss_new_count == 0:
         return "RSS returned 0 new papers in the configured categories."
     if recommendation_stats.after_dedup_filter_count == 0:

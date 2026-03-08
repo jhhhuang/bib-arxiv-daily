@@ -17,7 +17,7 @@ The current version does not use OpenAI, Claude, or any paid LLM API. It uses an
 
 1. Read every `.bib` file under `data/**/*.bib`
 2. Keep entries that have both `title` and `abstract`
-3. Fetch newly announced arXiv papers from the categories you configured
+3. Fetch newly announced arXiv papers from the categories you configured, and fall back to `https://export.arxiv.org/api/query` over the last 24 hours when RSS is temporarily empty
 4. Compute text embeddings for your library papers and the new arXiv candidates
 5. Rank candidates by similarity to your library
 6. Send an HTML email with the top matches
@@ -431,6 +431,27 @@ python3 -m venv .venv
 
 ## Troubleshooting
 
+### RSS returns 0 papers
+
+There are two different cases:
+
+- weekends or holidays, when arXiv may simply have no new announcement batch for your categories
+- the RSS blank window, where the daily announcement is already visible but `rss.arxiv.org` has not caught up yet
+
+In practice this means you can sometimes see:
+
+- arXiv daily announcement is already online
+- `RSS new papers = 0`
+- a few hours later the RSS feed starts returning entries normally
+
+This repository now handles that gap automatically:
+
+- it still checks RSS first
+- if RSS returns `0` new ids, it falls back to `https://export.arxiv.org/api/query`
+- the fallback searches `submittedDate` in the last `24` hours for your configured categories
+
+This fallback helps during the RSS propagation lag, but it does not magically create papers on days when arXiv really did not release a new batch.
+
 ### No email arrives
 
 Check:
@@ -495,4 +516,3 @@ Usually fix this by:
   https://learn.microsoft.com/en-us/Exchange/mail-flow-best-practices/how-to-set-up-a-multifunction-device-or-application-to-send-email-using-microsoft-365-or-office-365
 - Microsoft SMTP AUTH timeline update:
   https://techcommunity.microsoft.com/blog/exchange/updated-exchange-online-smtp-auth-basic-authentication-deprecation-timeline/4489835
-

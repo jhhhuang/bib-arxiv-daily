@@ -70,6 +70,9 @@ class ArxivFetchStats:
     rss_new_count: int
     rss_unique_count: int
     fetched_candidate_count: int
+    fallback_used: bool = False
+    fallback_window_hours: int = 0
+    fallback_candidate_count: int = 0
 
 
 @dataclass(frozen=True)

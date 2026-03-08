@@ -17,7 +17,7 @@
 
 1. 读取 `data/**/*.bib` 下的所有 `.bib` 文件
 2. 保留同时包含 `title` 和 `abstract` 的条目
-3. 抓取你配置的 arXiv 分类下当天新发布的论文
+3. 优先抓取你配置的 arXiv 分类 RSS；如果 RSS 临时为空，则退回到 `https://export.arxiv.org/api/query` 查询最近 `24` 小时提交的论文
 4. 计算你的馆藏论文和候选论文的文本向量
 5. 根据相似度排序
 6. 发送 HTML 推荐邮件
@@ -317,10 +317,10 @@ SMTP_USE_SSL=true
 
 ```yaml
 schedule:
-  - cron: "30 1 * * *"
+  - cron: "30 6 * * *"
 ```
 
-这表示每天 `01:30 UTC` 运行一次。
+这表示每天 `06:30 UTC` 运行一次。 也就是北京时间下午14:30.
 
 如果你想改时间，直接修改 cron 后提交即可。
 
@@ -437,6 +437,30 @@ python3 -m venv .venv
 
 ## 常见问题排查
 
+### RSS 没有条目
+
+这里要区分两种情况：
+
+- 周末或节假日，arXiv 本来就可能没有新的 announcement 批次
+- RSS 空白期：announcement 已经出了，但 `rss.arxiv.org` 还没同步完成
+
+所以你有时会看到这种现象：
+
+- arXiv 当天的 announcement 已经能看到了
+- 但是程序日志里还是 `RSS new papers = 0`
+- 再过几个小时，RSS 才恢复正常返回
+
+这就是所谓的 RSS 空白期。
+
+当前仓库已经做了自动兜底：
+
+- 先查 RSS
+- 如果 RSS 返回 `0` 个新 id
+- 就自动退回到 `https://export.arxiv.org/api/query`
+- 用你配置的分类去查最近 `24` 小时的 `submittedDate`
+
+这个兜底可以覆盖 announcement 已出、RSS 还没刷新的那段空白时间；但如果周末确实没有新论文批次，它也不会凭空产生结果。
+
 ### 没收到邮件
 
 请检查：
@@ -501,4 +525,3 @@ python3 -m venv .venv
   https://learn.microsoft.com/en-us/Exchange/mail-flow-best-practices/how-to-set-up-a-multifunction-device-or-application-to-send-email-using-microsoft-365-or-office-365
 - Microsoft SMTP AUTH 时间线更新：
   https://techcommunity.microsoft.com/blog/exchange/updated-exchange-online-smtp-auth-basic-authentication-deprecation-timeline/4489835
-

@@ -78,9 +78,11 @@ def main() -> int:
         library_embeddings=library_embeddings,
     )
     LOGGER.info(
-        "Pipeline stats | rss_new=%s rss_unique=%s fetched=%s after_dedup=%s threshold_filtered=%s final=%s",
+        "Pipeline stats | rss_new=%s rss_unique=%s fallback_used=%s fallback_count=%s fetched=%s after_dedup=%s threshold_filtered=%s final=%s",
         fetch_stats.rss_new_count,
         fetch_stats.rss_unique_count,
+        fetch_stats.fallback_used,
+        fetch_stats.fallback_candidate_count,
         fetch_stats.fetched_candidate_count,
         recommendation_stats.after_dedup_filter_count,
         recommendation_stats.threshold_filtered_count,
