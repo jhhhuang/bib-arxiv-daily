@@ -1,9 +1,9 @@
 arxiv:
   categories:
-    - nucl-th
-    - nucl-ex
-    - hep-ph
-    - hep-th
+    - cond-mat.mtrl-sci
+    - cond-mat.supr-con
+    - cond-mat.str-el
+    - physics.optics
   max_candidates: 100
 
 embedding:
@@ -12,7 +12,7 @@ embedding:
 
 ranking:
   top_k_neighbors: 6
-  max_results: 15
+  max_results: 20
 
 email:
   subject_prefix: "[arXiv Nuclear]"
