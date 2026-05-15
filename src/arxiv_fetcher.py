@@ -75,7 +75,7 @@ class ArxivFetcher:
             )
 
         arxiv_module = self._get_arxiv_module()
-        client = arxiv_module.Client(num_retries=5, delay_seconds=3)
+        client = arxiv_module.Client(page_size=25, num_retries=20, delay_seconds=10)
         candidates: list[CandidatePaper] = []
 
         for batch in chunked(unique_ids, 20):
@@ -113,7 +113,7 @@ class ArxivFetcher:
         api_url = f"{ARXIV_EXPORT_API_URL}?{urlencode(self._build_recent_query_params(query))}"
         LOGGER.info("Querying arXiv export API over explicit time window: %s", api_url)
 
-        client = arxiv_module.Client(num_retries=5, delay_seconds=3)
+        client = arxiv_module.Client(page_size=25, num_retries=20, delay_seconds=10)
         sort_criterion = getattr(getattr(arxiv_module, "SortCriterion", None), "SubmittedDate", None)
         sort_order = getattr(getattr(arxiv_module, "SortOrder", None), "Descending", None)
         search_kwargs = dict(
